@@ -1,0 +1,6 @@
+# Große Videodateien nicht ins Git
+footage/**
+!footage/.gitkeep
+exports/**
+!exports/.gitkeep
+__pycache__/
