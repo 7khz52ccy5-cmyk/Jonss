@@ -47,8 +47,14 @@ ffmpeg-basierte Pipeline (ffmpeg ist installiert). Funktionen:
 | `--max-clip 3` | jeden Clip auf max. 3 s kürzen (schnelles Tempo) |
 | `--cut-silence` | Pausen rausschneiden (Jump Cuts); Feinjustierung über `--silence-min`, `--silence-db` |
 | `--hook "Text"` | Text-Overlay am Anfang (Emojis werden entfernt, die gehören in die Caption) |
-| `--captions --lang de` | automatische Wort-für-Wort-Untertitel; braucht `pip install faster-whisper` und Internet für das Modell |
+| `--captions --lang de` | automatische Wort-für-Wort-Untertitel (Großbuchstaben, aktuelles Wort gelb); braucht `pip install faster-whisper` und Internet für das Modell |
+| `--hint "Namen, Orte"` | Begriffe, die im Video vorkommen → bessere Erkennung (australische Orte sind schon eingebaut) |
+| `--fix=falsch=richtig` | einzelnes Wort in den Untertiteln korrigieren; `--fix=wort=` löscht es. Immer mit `=` schreiben, sonst stolpert es über Wörter mit Bindestrich |
 | `--music datei.mp3 --music-vol 0.18` | Musik drunter, wird leiser, sobald gesprochen wird |
+
+**Untertitel-Ablauf:** Das Skript speichert neben dem Video eine `.transkript.txt`. Die nach Hör-Fehlern durchsehen (besonders englische Orts- und Markennamen in deutscher Sprache) und dann mit `--fix` neu exportieren. Bei Unsicherheit dem Creator das Transkript zeigen.
+
+**Getestet (12.11.2026)** mit künstlichem Material: Hochformat-Clip mit deutscher Sprache und Pausen sowie Querformat-Clip ohne Ton. Pausenschnitt, Blur-Modus, Hook, Untertitel, Korrekturen und Musik funktionieren. Ein 12-Sekunden-Video braucht etwa 30 Sekunden Rechenzeit.
 
 Ton wird immer auf TikTok-Lautstärke (−14 LUFS) normalisiert. Wenn sein Stil Dinge braucht, die fehlen (z. B. Zooms, Übergänge, bestimmte Schriftart oder -farbe), das Skript erweitern und die Option hier ergänzen.
 

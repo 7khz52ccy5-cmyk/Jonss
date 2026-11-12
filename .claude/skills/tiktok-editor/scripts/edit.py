@@ -146,13 +146,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
 
-def transcribe(src, lang, model_size):
+HINT = ("Australien, Sydney, Melbourne, Brisbane, Perth, Cairns, Byron Bay, Gold Coast, "
+        "Bondi Beach, Great Barrier Reef, Outback, Uluru, Work and Travel, Hostel, Roadtrip, "
+        "Känguru, Koala, Aussie, Woolworths, Coles, Flat White.")
+
+
+def transcribe(src, lang, model_size, hint=""):
     try:
         from faster_whisper import WhisperModel
     except ImportError:
         sys.exit("Für --captions bitte zuerst installieren:  pip install faster-whisper")
+    import numpy as np
+    # Ton selbst per ffmpeg auslesen (16 kHz mono) – unabhängig von PyAV-Versionen
+    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", src, "-ac", "1", "-ar", "16000",
+                          "-f", "s16le", "-"], capture_output=True, check=True).stdout
+    audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768.0
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
-    segments, _ = model.transcribe(src, language=lang, word_timestamps=True, vad_filter=True)
+    segments, _ = model.transcribe(audio, language=lang, word_timestamps=True, vad_filter=True,
+                                  initial_prompt=(HINT + " " + hint).strip())
     words = []
     for seg in segments:
         for w in seg.words or []:
@@ -198,11 +209,14 @@ def main():
     ap.add_argument("--captions", action="store_true", help="Automatische Untertitel (faster-whisper)")
     ap.add_argument("--lang", default="de")
     ap.add_argument("--whisper-model", default="small")
+    ap.add_argument("--hint", default="", help="Namen/Begriffe, die im Video vorkommen (bessere Erkennung)")
+    ap.add_argument("--fix", action="append", default=[], help='Wort korrigieren: --fix "falsch=richtig"')
     ap.add_argument("--music", default="", help="Hintergrundmusik (mp3/m4a/wav)")
     ap.add_argument("--music-vol", type=float, default=0.18)
     ap.add_argument("--keep-tmp", action="store_true")
     a = ap.parse_args()
 
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="ttedit_")
     try:
         prepared = []
@@ -228,9 +242,12 @@ def main():
                           + r"{\fad(120,200)}" + ass_escape(a.hook))
         if a.captions:
             print("[3/5] Untertitel erzeugen (Whisper)")
-            words = transcribe(joined, a.lang, a.whisper_model)
-            if a.hook:  # Untertitel nicht über den Hook legen
-                words = [w for w in words if w[0] >= a.hook_dur - 0.3] or words
+            words = transcribe(joined, a.lang, a.whisper_model, a.hint)
+            for pair in a.fix:  # Korrekturen, z. B. "Bondi-Bach=Bondi Beach"
+                alt, neu = pair.split("=", 1)
+                words = [(s0, e0, neu if t.strip(".,!?").lower() == alt.lower() else t)
+                         for s0, e0, t in words]
+                words = [w for w in words if w[2]]  # leerer Ersatz = Wort löschen
             events += caption_events(words)
             with open(os.path.splitext(a.out)[0] + ".transkript.txt", "w") as f:
                 f.write(" ".join(w[2] for w in words))
@@ -253,7 +270,6 @@ def main():
                   f"[voice][duck]amix=inputs=2:duration=first:normalize=0[a]")
         else:
             af = "[0:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]"
-        os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         run(cmd + ["-filter_complex", vf + ";" + af, "-map", "[v]", "-map", "[a]",
                    "-t", f"{total:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "19",
                    "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
